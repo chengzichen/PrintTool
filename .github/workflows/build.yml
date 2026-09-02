@@ -27,9 +27,8 @@ jobs:
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: PrintTool-Windows-EXE
-          path: build/compose/binaries/main/app/*.exe
-          # 如果打包生成的是 .msi，请将上面一行改成 path: build/compose/binaries/main/app/*.msi
+          name: PrintTool-Windows
+          path: build/compose/binaries/main/**/*.exe
 
   build-macos:
     runs-on: macos-latest
@@ -53,4 +52,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PrintTool-macOS-DMG
-          path: build/compose/binaries/main/app/*.dmg
+          path: build/compose/binaries/main/**/*.dmg
