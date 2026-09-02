@@ -15,13 +15,17 @@ import java.io.FileOutputStream
 
 object PdfGenerator {
     private const val MM_TO_PT = 2.83465f
-    private const val PAPER_WIDTH = 80 * MM_TO_PT
-    private const val PAPER_HEIGHT = 130 * MM_TO_PT
-    private const val LABELS_PER_PAGE = 3
-    private const val LEFT_OFFSET = 12 * MM_TO_PT
-    
-    fun createPdf(items: List<ProductItem>, outputFile: File) {
-        val document = Document(Rectangle(PAPER_WIDTH, PAPER_HEIGHT))
+    fun createPdf(
+        items: List<ProductItem>, 
+        outputFile: File, 
+        paperWidthMm: Float = 80f,
+        paperHeightMm: Float = 130f,
+        labelsPerPage: Int = 3,
+        onProgress: ((Int, Int) -> Unit)? = null
+    ) {
+        val paperWidth = paperWidthMm * MM_TO_PT
+        val paperHeight = paperHeightMm * MM_TO_PT
+        val document = Document(Rectangle(paperWidth, paperHeight))
         document.setMargins(0f, 0f, 0f, 0f)
         val writer = PdfWriter.getInstance(document, FileOutputStream(outputFile))
         document.open()
@@ -47,22 +51,27 @@ object PdfGenerator {
         
         val bf = baseFont ?: throw RuntimeException("Could not load any Chinese font")
         
-        val cellH = PAPER_HEIGHT / LABELS_PER_PAGE
+        val cellH = paperHeight / labelsPerPage
         val bcWidth = 46 * MM_TO_PT
         val bcHeight = 11 * MM_TO_PT
-        val positions = (0 until LABELS_PER_PAGE).map { (LABELS_PER_PAGE - 1 - it) * cellH }
+        val leftOffset = 12 * MM_TO_PT
+        val positions = (0 until labelsPerPage).map { (labelsPerPage - 1 - it) * cellH }
         
         val expandedItems = items.flatMap { item -> List(item.copies) { item } }
-        val chunks = expandedItems.chunked(LABELS_PER_PAGE)
+        val chunks = expandedItems.chunked(labelsPerPage)
+        val totalChunks = chunks.size
         
-        for (pageItems in chunks) {
-            // Draw cut lines
-            cb.setLineDash(4f, 4f, 0f)
-            cb.moveTo(5 * MM_TO_PT, cellH)
-            cb.lineTo(PAPER_WIDTH - 5 * MM_TO_PT, cellH)
-            cb.moveTo(5 * MM_TO_PT, 2 * cellH)
-            cb.lineTo(PAPER_WIDTH - 5 * MM_TO_PT, 2 * cellH)
-            cb.stroke()
+        for ((pageIndex, pageItems) in chunks.withIndex()) {
+            onProgress?.invoke(pageIndex, totalChunks)
+            // Draw cut lines (only draw if there is more than 1 label per page)
+            if (labelsPerPage > 1) {
+                cb.setLineDash(4f, 4f, 0f)
+                for (k in 1 until labelsPerPage) {
+                    cb.moveTo(5 * MM_TO_PT, k * cellH)
+                    cb.lineTo(paperWidth - 5 * MM_TO_PT, k * cellH)
+                }
+                cb.stroke()
+            }
             cb.setLineDash(0f)
             
             for (i in pageItems.indices) {
@@ -74,31 +83,34 @@ object PdfGenerator {
                 // Generate Barcode image
                 val barcodeBytes = generateBarcode(item.barcode)
                 val pdfImg = PdfImage.getInstance(barcodeBytes)
-                pdfImg.setAbsolutePosition(LEFT_OFFSET, bcY)
+                pdfImg.setAbsolutePosition(leftOffset, bcY)
                 pdfImg.scaleAbsolute(bcWidth, bcHeight)
                 cb.addImage(pdfImg)
                 
                 // Draw texts
                 cb.beginText()
                 cb.setFontAndSize(bf, 8.5f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.barcode, LEFT_OFFSET + 1 * MM_TO_PT, bcY - 4 * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.barcode, leftOffset + 1 * MM_TO_PT, bcY - 4 * MM_TO_PT, 0f)
                 cb.endText()
                 
                 cb.setRGBColorStroke(128, 128, 128)
-                cb.moveTo(LEFT_OFFSET, bcY - 6 * MM_TO_PT)
-                cb.lineTo(LEFT_OFFSET + 52 * MM_TO_PT, bcY - 6 * MM_TO_PT)
+                cb.moveTo(leftOffset, bcY - 6 * MM_TO_PT)
+                cb.lineTo(leftOffset + 52 * MM_TO_PT, bcY - 6 * MM_TO_PT)
                 cb.stroke()
                 cb.setRGBColorStroke(0, 0, 0)
                 
                 cb.beginText()
                 cb.setFontAndSize(bf, 9f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "尺 码 : ${item.spec}", LEFT_OFFSET + 1 * MM_TO_PT, bcY - 11 * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "价 格 : ${item.price}", LEFT_OFFSET + 1 * MM_TO_PT, bcY - 17.5f * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "材 质 : ${item.name}", LEFT_OFFSET + 1 * MM_TO_PT, bcY - 24 * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "尺 码 : ${item.spec}", leftOffset + 1 * MM_TO_PT, bcY - 11 * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "价 格 : ${item.price}", leftOffset + 1 * MM_TO_PT, bcY - 17.5f * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "材 质 : ${item.name}", leftOffset + 1 * MM_TO_PT, bcY - 24 * MM_TO_PT, 0f)
                 cb.endText()
             }
             document.newPage()
         }
+        
+        onProgress?.invoke(totalChunks, totalChunks)
+        
         document.close()
     }
     

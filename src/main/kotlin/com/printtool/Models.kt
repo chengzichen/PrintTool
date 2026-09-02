@@ -7,5 +7,6 @@ data class ProductItem(
     val status: String,
     val price: String,
     val supplier: String,
-    val copies: Int = 1
+    val copies: Int = 1,
+    val selected: Boolean = true
 )

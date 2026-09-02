@@ -34,6 +34,10 @@ dependencies {
 
     // PDFBox for silent printing directly in Java
     implementation 'org.apache.pdfbox:pdfbox:2.0.29'
+    
+    // JNA for native Windows API calls (Printer Control)
+    implementation 'net.java.dev.jna:jna:5.14.0'
+    implementation 'net.java.dev.jna:jna-platform:5.14.0'
 }
 
 compose.desktop {
