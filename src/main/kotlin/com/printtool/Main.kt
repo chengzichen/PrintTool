@@ -3,6 +3,7 @@ package com.printtool
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicTextField
 import java.awt.image.BufferedImage
@@ -51,6 +53,9 @@ fun App() {
     var printProgress by remember { mutableStateOf(0f) }
     var statusMessage by remember { mutableStateOf("就绪 (Ready)") }
     var previewItem by remember { mutableStateOf<ProductItem?>(null) }
+    
+    var showBatchPriceDialog by remember { mutableStateOf(false) }
+    var batchPriceInput by remember { mutableStateOf("") }
     
     val prefs = remember { Preferences.userRoot().node("com.printtool.config") }
     
@@ -322,6 +327,7 @@ fun App() {
             // Table Header
             Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 val allSelected = items.isNotEmpty() && items.all { it.selected }
+                val anySelected = items.any { it.selected }
                 Checkbox(checked = allSelected, onCheckedChange = { isChecked ->
                     items = items.map { it.copy(selected = isChecked) }
                 }, modifier = Modifier.weight(0.5f))
@@ -329,7 +335,20 @@ fun App() {
                 Text("商品名称 (Name)", Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
                 Text("分类 (Cat)", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                 Text("规格 (Spec)", Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                Text("价格 (Price)", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text("价格 ", fontWeight = FontWeight.Bold)
+                    if (anySelected) {
+                        Text(
+                            "✏️批改", 
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.clickable { showBatchPriceDialog = true }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                
                 Text("份数", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                 Text("操作", Modifier.weight(1f), fontWeight = FontWeight.Bold)
             }
@@ -365,6 +384,40 @@ fun App() {
         if (previewItem != null) {
             LabelPreviewDialog(previewItem!!) { previewItem = null }
         }
+        
+        if (showBatchPriceDialog) {
+            DialogWindow(
+                onCloseRequest = { showBatchPriceDialog = false }, 
+                title = "批量修改价格",
+                state = rememberDialogState(width = 320.dp, height = 240.dp)
+            ) {
+                Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("请输入选中的标签的新价格：", Modifier.padding(bottom = 12.dp))
+                    OutlinedTextField(
+                        value = batchPriceInput,
+                        onValueChange = { batchPriceInput = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("例如: 12.00") }
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Button(onClick = {
+                            items = items.map { 
+                                if (it.selected) it.copy(price = batchPriceInput) else it 
+                            }
+                            showBatchPriceDialog = false
+                            batchPriceInput = ""
+                        }) {
+                            Text("确定修改")
+                        }
+                        OutlinedButton(onClick = { showBatchPriceDialog = false }) {
+                            Text("取消")
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -380,7 +433,7 @@ fun TableCellTextField(value: String, onValueChange: (String) -> Unit, modifier:
 
 fun generateBarcodeBitmap(data: String): ImageBitmap {
     val writer = Code128Writer()
-    val matrix = writer.encode(data, BarcodeFormat.CODE_128, 300, 100)
+    val matrix = writer.encode(data, BarcodeFormat.CODE_128, 600, 150)
     val width = matrix.width
     val height = matrix.height
     val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
@@ -399,18 +452,19 @@ fun LabelPreviewDialog(item: ProductItem, onDismiss: () -> Unit) {
         Box(Modifier.fillMaxSize().background(Color.LightGray), contentAlignment = Alignment.Center) {
             val widthDp = 320.dp
             
-            Column(Modifier.width(widthDp).wrapContentHeight().background(Color.White).padding(16.dp)) {
+            Column(Modifier.width(widthDp).wrapContentHeight().background(Color.White).padding(horizontal = 12.dp, vertical = 12.dp)) {
                 val barcodeBitmap = remember(item.barcode) { 
                     try { generateBarcodeBitmap(item.barcode) } catch (e: Exception) { null } 
                 }
                 if (barcodeBitmap != null) {
-                    Image(barcodeBitmap, contentDescription = "Barcode", modifier = Modifier.height(60.dp).fillMaxWidth(), contentScale = ContentScale.FillBounds)
+                    // Padding horizontal 12.dp leaves 296dp for barcode, which is 92.5% of 320dp width
+                    Image(barcodeBitmap, contentDescription = "Barcode", modifier = Modifier.height(52.dp).fillMaxWidth().padding(horizontal = 12.dp), contentScale = ContentScale.FillBounds)
                 }
                 Text(item.barcode, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Divider(color = Color.Gray, thickness = 1.dp)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 
                 Text(item.name, style = MaterialTheme.typography.bodyMedium)
                 Text("分 类 : ${item.category}", style = MaterialTheme.typography.bodyMedium)

@@ -50,6 +50,15 @@ compose.desktop {
                           org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg)
             packageName = 'PrintTool'
             packageVersion = '1.0.0'
+            
+            macOS {
+                iconFile.set(project.file("src/main/resources/icon.icns"))
+            }
+            windows {
+                iconFile.set(project.file("src/main/resources/icon.ico"))
+                shortcut = true
+                menu = true
+            }
         }
     }
 }

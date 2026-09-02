@@ -52,8 +52,8 @@ object PdfGenerator {
         val bf = baseFont ?: throw RuntimeException("Could not load any Chinese font")
         
         val cellH = paperHeight / labelsPerPage
-        val bcWidth = 48 * MM_TO_PT
-        val bcHeight = 15 * MM_TO_PT
+        val bcWidth = 72 * MM_TO_PT
+        val bcHeight = 14 * MM_TO_PT
         val textLeftOffset = 12 * MM_TO_PT
         val barcodeLeftOffset = (paperWidth - bcWidth) / 2
         val positions = (0 until labelsPerPage).map { (labelsPerPage - 1 - it) * cellH }
@@ -103,10 +103,10 @@ object PdfGenerator {
                 
                 cb.beginText()
                 cb.setFontAndSize(bf, 9f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.name, textLeftOffset, bcY - 10 * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "分 类 : ${item.category}", textLeftOffset, bcY - 14.5f * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "规 格 : ${item.spec}", textLeftOffset, bcY - 19 * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "价 格 : ￥${item.price}", textLeftOffset, bcY - 23.5f * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.name, textLeftOffset, bcY - 9.5f * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "分 类 : ${item.category}", textLeftOffset, bcY - 14 * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "规 格 : ${item.spec}", textLeftOffset, bcY - 18.5f * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "价 格 : ￥${item.price}", textLeftOffset, bcY - 23 * MM_TO_PT, 0f)
                 cb.endText()
             }
             document.newPage()
