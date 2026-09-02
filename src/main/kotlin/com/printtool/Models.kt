@@ -2,6 +2,7 @@ package com.printtool
 
 data class ProductItem(
     val name: String,
+    val category: String,
     val spec: String,
     val barcode: String,
     val status: String,

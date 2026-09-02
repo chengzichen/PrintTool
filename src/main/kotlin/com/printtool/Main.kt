@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.DialogWindow
@@ -102,6 +103,9 @@ fun App() {
                                     path = path.substring(7)
                                 } else if (path.startsWith("file:/")) {
                                     path = path.substring(6)
+                                }
+                                if (!path.startsWith("/") && !path.contains(":\\")) {
+                                    path = "/$path"
                                 }
                                 if (path.startsWith("/") && (path.contains(":\\") || path.contains(":/"))) {
                                     path = path.substring(1)
@@ -322,8 +326,9 @@ fun App() {
                     items = items.map { it.copy(selected = isChecked) }
                 }, modifier = Modifier.weight(0.5f))
                 Text("条码 (Barcode)", Modifier.weight(2f), fontWeight = FontWeight.Bold)
-                Text("商品名称 (Name)", Modifier.weight(2f), fontWeight = FontWeight.Bold)
-                Text("规格 (Spec)", Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
+                Text("商品名称 (Name)", Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
+                Text("分类 (Cat)", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                Text("规格 (Spec)", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                 Text("价格 (Price)", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                 Text("份数", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                 Text("操作", Modifier.weight(1f), fontWeight = FontWeight.Bold)
@@ -337,8 +342,9 @@ fun App() {
                             items = items.toMutableList().apply { set(index, item.copy(selected = isChecked)) } 
                         }, modifier = Modifier.weight(0.5f))
                         TableCellTextField(item.barcode, { items = items.toMutableList().apply { set(index, item.copy(barcode = it)) } }, Modifier.weight(2f))
-                        TableCellTextField(item.name, { items = items.toMutableList().apply { set(index, item.copy(name = it)) } }, Modifier.weight(2f))
-                        TableCellTextField(item.spec, { items = items.toMutableList().apply { set(index, item.copy(spec = it)) } }, Modifier.weight(1.5f))
+                        TableCellTextField(item.name, { items = items.toMutableList().apply { set(index, item.copy(name = it)) } }, Modifier.weight(1.5f))
+                        TableCellTextField(item.category, { items = items.toMutableList().apply { set(index, item.copy(category = it)) } }, Modifier.weight(1f))
+                        TableCellTextField(item.spec, { items = items.toMutableList().apply { set(index, item.copy(spec = it)) } }, Modifier.weight(1f))
                         TableCellTextField(item.price, { items = items.toMutableList().apply { set(index, item.copy(price = it)) } }, Modifier.weight(1f))
                         
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -400,15 +406,16 @@ fun LabelPreviewDialog(item: ProductItem, onDismiss: () -> Unit) {
                 if (barcodeBitmap != null) {
                     Image(barcodeBitmap, contentDescription = "Barcode", modifier = Modifier.height(60.dp).fillMaxWidth(), contentScale = ContentScale.FillBounds)
                 }
-                Text(item.barcode, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
+                Text(item.barcode, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 
                 Spacer(Modifier.height(8.dp))
                 Divider(color = Color.Gray, thickness = 1.dp)
                 Spacer(Modifier.height(8.dp))
                 
                 Text(item.name, style = MaterialTheme.typography.bodyMedium)
+                Text("分 类 : ${item.category}", style = MaterialTheme.typography.bodyMedium)
                 Text("规 格 : ${item.spec}", style = MaterialTheme.typography.bodyMedium)
-                Text("价 格 : ${item.price}", style = MaterialTheme.typography.bodyMedium)
+                Text("价 格 : ￥${item.price}", style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

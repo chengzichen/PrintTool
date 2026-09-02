@@ -26,14 +26,15 @@ object CsvParser {
             }
 
             val name = getValue("商品名称")
+            val category = getValue("商品分类")
             val spec = getValue("规格")
             val barcode = getValue("条码").trim()
             val status = getValue("当前状态")
-            val price = getValue("采购单价")
+            val price = getValue("建议售价").ifEmpty { getValue("采购单价") }
             val supplier = getValue("供应商")
             
             if (barcode.isNotEmpty()) {
-                items.add(ProductItem(name, spec, barcode, status, price, supplier))
+                items.add(ProductItem(name, category, spec, barcode, status, price, supplier))
             }
         }
         return items
