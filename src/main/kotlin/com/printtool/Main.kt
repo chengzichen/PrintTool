@@ -406,9 +406,9 @@ fun LabelPreviewDialog(item: ProductItem, onDismiss: () -> Unit) {
                 Divider(color = Color.Gray, thickness = 1.dp)
                 Spacer(Modifier.height(8.dp))
                 
-                Text("尺 码 : ${item.spec}", style = MaterialTheme.typography.bodyMedium)
+                Text(item.name, style = MaterialTheme.typography.bodyMedium)
+                Text("规 格 : ${item.spec}", style = MaterialTheme.typography.bodyMedium)
                 Text("价 格 : ${item.price}", style = MaterialTheme.typography.bodyMedium)
-                Text("材 质 : ${item.name}", style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

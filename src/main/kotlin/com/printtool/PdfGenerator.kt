@@ -90,7 +90,7 @@ object PdfGenerator {
                 // Draw texts
                 cb.beginText()
                 cb.setFontAndSize(bf, 8.5f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.barcode, leftOffset + 1 * MM_TO_PT, bcY - 4 * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_CENTER, item.barcode, leftOffset + bcWidth / 2, bcY - 4 * MM_TO_PT, 0f)
                 cb.endText()
                 
                 cb.setRGBColorStroke(128, 128, 128)
@@ -101,9 +101,9 @@ object PdfGenerator {
                 
                 cb.beginText()
                 cb.setFontAndSize(bf, 9f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "尺 码 : ${item.spec}", leftOffset + 1 * MM_TO_PT, bcY - 11 * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "价 格 : ${item.price}", leftOffset + 1 * MM_TO_PT, bcY - 17.5f * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "材 质 : ${item.name}", leftOffset + 1 * MM_TO_PT, bcY - 24 * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.name, leftOffset + 1 * MM_TO_PT, bcY - 11 * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "规 格 : ${item.spec}", leftOffset + 1 * MM_TO_PT, bcY - 17.5f * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "价 格 : ${item.price}", leftOffset + 1 * MM_TO_PT, bcY - 24 * MM_TO_PT, 0f)
                 cb.endText()
             }
             document.newPage()
@@ -116,7 +116,7 @@ object PdfGenerator {
     
     private fun generateBarcode(data: String): ByteArray {
         val writer = Code128Writer()
-        val bitMatrix = writer.encode(data, BarcodeFormat.CODE_128, 300, 100)
+        val bitMatrix = writer.encode(data, BarcodeFormat.CODE_128, 900, 200)
         val baos = ByteArrayOutputStream()
         MatrixToImageWriter.writeToStream(bitMatrix, "PNG", baos)
         return baos.toByteArray()
