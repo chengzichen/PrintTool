@@ -52,10 +52,10 @@ object PdfGenerator {
         val bf = baseFont ?: throw RuntimeException("Could not load any Chinese font")
         
         val cellH = paperHeight / labelsPerPage
-        val bcWidth = 72 * MM_TO_PT
-        val bcHeight = 14 * MM_TO_PT
-        val textLeftOffset = 12 * MM_TO_PT
-        val barcodeLeftOffset = (paperWidth - bcWidth) / 2
+        val bcWidth = paperWidth * 0.9f
+        val bcHeight = 10 * MM_TO_PT // Reduced from 14mm
+        val textLeftOffset = paperWidth * 0.1f // 10% of width
+        val barcodeLeftOffset = (paperWidth - bcWidth) / 2f
         val positions = (0 until labelsPerPage).map { (labelsPerPage - 1 - it) * cellH }
         
         val expandedItems = items.flatMap { item -> List(item.copies) { item } }
@@ -79,7 +79,7 @@ object PdfGenerator {
                 val item = pageItems[i]
                 val pos = positions[i]
                 
-                val bcY = pos + cellH - bcHeight - 2 * MM_TO_PT // reduced top margin to 2mm to fit higher barcode
+                val bcY = pos + cellH - bcHeight - 1 * MM_TO_PT // reduced top margin to 1mm
                 
                 // Generate Barcode image
                 val barcodeBytes = generateBarcode(item.barcode)
@@ -90,23 +90,24 @@ object PdfGenerator {
                 
                 // Draw texts
                 cb.beginText()
-                cb.setFontAndSize(bf, 8.5f)
+                cb.setFontAndSize(bf, 7.5f) // Reduced barcode font
                 // Center the text perfectly under the barcode
-                cb.showTextAligned(PdfContentByte.ALIGN_CENTER, item.barcode, barcodeLeftOffset + bcWidth / 2, bcY - 3.5f * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_CENTER, item.barcode, barcodeLeftOffset + bcWidth / 2, bcY - 3f * MM_TO_PT, 0f)
                 cb.endText()
                 
                 cb.setRGBColorStroke(128, 128, 128)
-                cb.moveTo(textLeftOffset, bcY - 5.5f * MM_TO_PT)
-                cb.lineTo(paperWidth - textLeftOffset, bcY - 5.5f * MM_TO_PT)
+                cb.moveTo(textLeftOffset, bcY - 4.5f * MM_TO_PT)
+                cb.lineTo(paperWidth - textLeftOffset, bcY - 4.5f * MM_TO_PT)
                 cb.stroke()
                 cb.setRGBColorStroke(0, 0, 0)
                 
                 cb.beginText()
-                cb.setFontAndSize(bf, 9f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.name, textLeftOffset, bcY - 9.5f * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "分 类 : ${item.category}", textLeftOffset, bcY - 14 * MM_TO_PT, 0f)
+                cb.setFontAndSize(bf, 8.5f) // Reduced main text font
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.name, textLeftOffset, bcY - 8f * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "分 类 : ${item.category}", textLeftOffset, bcY - 11.5f * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "材 质 : ${item.material}", textLeftOffset, bcY - 15f * MM_TO_PT, 0f)
                 cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "规 格 : ${item.spec}", textLeftOffset, bcY - 18.5f * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "价 格 : ￥${item.price}", textLeftOffset, bcY - 23 * MM_TO_PT, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "价 格 : ￥${item.price}", textLeftOffset, bcY - 22.0f * MM_TO_PT, 0f)
                 cb.endText()
             }
             document.newPage()

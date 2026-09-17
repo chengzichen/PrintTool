@@ -46,6 +46,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.onExternalDrag
 import java.util.prefs.Preferences
 
+data class PaperTemplate(val name: String, val width: Float, val height: Float, val labelsPerPage: Int)
+
 @Composable
 fun App() {
     var items by remember { mutableStateOf<List<ProductItem>>(emptyList()) }
@@ -63,9 +65,15 @@ fun App() {
     var selectedPrinter by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf(false) }
     
-    var paperWidth by remember { mutableStateOf(prefs.get("paperWidth", "80")) }
-    var paperHeight by remember { mutableStateOf(prefs.get("paperHeight", "130")) }
-    var labelsPerPage by remember { mutableStateOf(prefs.get("labelsPerPage", "3")) }
+    val templates = listOf(
+        PaperTemplate("80x130mm (1页3签)", 80f, 130f, 3),
+        PaperTemplate("60x40mm (1页1签)", 60f, 40f, 1)
+    )
+    var selectedTemplateIndex by remember { mutableStateOf(prefs.getInt("selectedTemplateIndex", 0)) }
+    LaunchedEffect(selectedTemplateIndex) { prefs.putInt("selectedTemplateIndex", selectedTemplateIndex) }
+    val currentTemplate = templates.getOrElse(selectedTemplateIndex) { templates[0] }
+    
+    var expandedTemplate by remember { mutableStateOf(false) }
     
     val coroutineScope = rememberCoroutineScope()
 
@@ -85,9 +93,6 @@ fun App() {
         }
     }
     
-    LaunchedEffect(paperWidth) { prefs.put("paperWidth", paperWidth) }
-    LaunchedEffect(paperHeight) { prefs.put("paperHeight", paperHeight) }
-    LaunchedEffect(labelsPerPage) { prefs.put("labelsPerPage", labelsPerPage) }
     LaunchedEffect(selectedPrinter) { selectedPrinter?.let { prefs.put("selectedPrinter", it) } }
 
     @OptIn(ExperimentalComposeUiApi::class)
@@ -204,15 +209,27 @@ fun App() {
                         }
                     }
                     
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("纸宽(mm):", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedTextField(value = paperWidth, onValueChange = { paperWidth = it }, modifier = Modifier.width(70.dp), singleLine = true)
-                        
-                        Text("纸高(mm):", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedTextField(value = paperHeight, onValueChange = { paperHeight = it }, modifier = Modifier.width(70.dp), singleLine = true)
-                        
-                        Text("每页张数:", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedTextField(value = labelsPerPage, onValueChange = { labelsPerPage = it }, modifier = Modifier.width(70.dp), singleLine = true)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("纸张模板：", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 8.dp))
+                        Box {
+                            OutlinedButton(onClick = { expandedTemplate = true }) {
+                                Text(currentTemplate.name)
+                            }
+                            DropdownMenu(
+                                expanded = expandedTemplate,
+                                onDismissRequest = { expandedTemplate = false }
+                            ) {
+                                templates.forEachIndexed { index, template ->
+                                    DropdownMenuItem(
+                                        text = { Text(template.name) },
+                                        onClick = {
+                                            selectedTemplateIndex = index
+                                            expandedTemplate = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 
@@ -233,9 +250,9 @@ fun App() {
                                     PdfGenerator.createPdf(
                                         selectedItems, 
                                         f,
-                                        paperWidthMm = paperWidth.toFloatOrNull() ?: 80f,
-                                        paperHeightMm = paperHeight.toFloatOrNull() ?: 130f,
-                                        labelsPerPage = labelsPerPage.toIntOrNull() ?: 3
+                                        paperWidthMm = currentTemplate.width,
+                                        paperHeightMm = currentTemplate.height,
+                                        labelsPerPage = currentTemplate.labelsPerPage
                                     ) { current, total ->
                                         printProgress = current.toFloat() / total.toFloat()
                                     }
@@ -334,6 +351,7 @@ fun App() {
                 Text("条码 (Barcode)", Modifier.weight(2f), fontWeight = FontWeight.Bold)
                 Text("商品名称 (Name)", Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
                 Text("分类 (Cat)", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                Text("材质", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                 Text("规格 (Spec)", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                 
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -363,6 +381,7 @@ fun App() {
                         TableCellTextField(item.barcode, { items = items.toMutableList().apply { set(index, item.copy(barcode = it)) } }, Modifier.weight(2f))
                         TableCellTextField(item.name, { items = items.toMutableList().apply { set(index, item.copy(name = it)) } }, Modifier.weight(1.5f))
                         TableCellTextField(item.category, { items = items.toMutableList().apply { set(index, item.copy(category = it)) } }, Modifier.weight(1f))
+                        TableCellTextField(item.material, { items = items.toMutableList().apply { set(index, item.copy(material = it)) } }, Modifier.weight(1f))
                         TableCellTextField(item.spec, { items = items.toMutableList().apply { set(index, item.copy(spec = it)) } }, Modifier.weight(1f))
                         TableCellTextField(item.price, { items = items.toMutableList().apply { set(index, item.copy(price = it)) } }, Modifier.weight(1f))
                         
@@ -382,7 +401,7 @@ fun App() {
         }
         
         if (previewItem != null) {
-            LabelPreviewDialog(previewItem!!) { previewItem = null }
+            LabelPreviewDialog(previewItem!!, currentTemplate) { previewItem = null }
         }
         
         if (showBatchPriceDialog) {
@@ -446,30 +465,33 @@ fun generateBarcodeBitmap(data: String): ImageBitmap {
 }
 
 @Composable
-fun LabelPreviewDialog(item: ProductItem, onDismiss: () -> Unit) {
-    val state = rememberDialogState(width = 400.dp, height = 300.dp)
+fun LabelPreviewDialog(item: ProductItem, template: PaperTemplate, onDismiss: () -> Unit) {
+    val state = rememberDialogState(width = 400.dp, height = 400.dp)
     DialogWindow(onCloseRequest = onDismiss, title = "标签预览", state = state) {
         Box(Modifier.fillMaxSize().background(Color.LightGray), contentAlignment = Alignment.Center) {
             val widthDp = 320.dp
+            val singleLabelHeight = template.height / template.labelsPerPage
+            val ratio = singleLabelHeight / template.width
+            val heightDp = widthDp * ratio
             
-            Column(Modifier.width(widthDp).wrapContentHeight().background(Color.White).padding(horizontal = 12.dp, vertical = 12.dp)) {
+            Column(Modifier.width(widthDp).height(heightDp).background(Color.White).padding(horizontal = 12.dp, vertical = 12.dp)) {
                 val barcodeBitmap = remember(item.barcode) { 
                     try { generateBarcodeBitmap(item.barcode) } catch (e: Exception) { null } 
                 }
                 if (barcodeBitmap != null) {
-                    // Padding horizontal 12.dp leaves 296dp for barcode, which is 92.5% of 320dp width
-                    Image(barcodeBitmap, contentDescription = "Barcode", modifier = Modifier.height(52.dp).fillMaxWidth().padding(horizontal = 12.dp), contentScale = ContentScale.FillBounds)
+                    Image(barcodeBitmap, contentDescription = "Barcode", modifier = Modifier.height(heightDp * 0.25f).fillMaxWidth().padding(horizontal = 12.dp), contentScale = ContentScale.FillBounds)
                 }
-                Text(item.barcode, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                Text(item.barcode, style = MaterialTheme.typography.labelSmall, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(heightDp * 0.02f))
                 Divider(color = Color.Gray, thickness = 1.dp)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(heightDp * 0.02f))
                 
-                Text(item.name, style = MaterialTheme.typography.bodyMedium)
-                Text("分 类 : ${item.category}", style = MaterialTheme.typography.bodyMedium)
-                Text("规 格 : ${item.spec}", style = MaterialTheme.typography.bodyMedium)
-                Text("价 格 : ￥${item.price}", style = MaterialTheme.typography.bodyMedium)
+                Text(item.name, style = MaterialTheme.typography.labelMedium)
+                Text("分 类 : ${item.category}", style = MaterialTheme.typography.labelSmall)
+                Text("材 质 : ${item.material}", style = MaterialTheme.typography.labelSmall)
+                Text("规 格 : ${item.spec}", style = MaterialTheme.typography.labelSmall)
+                Text("价 格 : ￥${item.price}", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
