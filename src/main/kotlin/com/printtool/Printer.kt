@@ -37,10 +37,20 @@ object Printer {
 
             val attributes = javax.print.attribute.HashPrintRequestAttributeSet()
             
-            // Use PDFPageable to handle dynamic media boxes across multiple pages automatically
-            // This prevents Mac label printer drivers from dropping pages due to size mismatches
-            val pageable = org.apache.pdfbox.printing.PDFPageable(document, org.apache.pdfbox.printing.Orientation.PORTRAIT, false, 0f)
-            printJob.setPageable(pageable)
+            val mediaBox = document.getPage(0).mediaBox
+            val paper = java.awt.print.Paper()
+            paper.setSize(mediaBox.width.toDouble(), mediaBox.height.toDouble())
+            paper.setImageableArea(0.0, 0.0, mediaBox.width.toDouble(), mediaBox.height.toDouble())
+            
+            val pageFormat = java.awt.print.PageFormat()
+            pageFormat.paper = paper
+            pageFormat.orientation = java.awt.print.PageFormat.PORTRAIT
+            
+            val book = java.awt.print.Book()
+            // Using ACTUAL_SIZE mathematically guarantees 1:1 printing without driver zooming
+            book.append(PDFPrintable(document, Scaling.ACTUAL_SIZE), pageFormat, document.numberOfPages)
+            
+            printJob.setPageable(book)
             
             printJob.print(attributes) // Silent print to selected printer
         } finally {
