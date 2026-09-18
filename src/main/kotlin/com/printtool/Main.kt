@@ -31,7 +31,7 @@ import androidx.compose.foundation.text.BasicTextField
 import java.awt.image.BufferedImage
 import java.awt.Color as AwtColor
 import com.google.zxing.BarcodeFormat
-import com.google.zxing.oned.Code128Writer
+import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,7 +44,9 @@ import javax.swing.filechooser.FileNameExtensionFilter
 import androidx.compose.ui.DragData
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.onExternalDrag
+import androidx.compose.ui.unit.sp
 import java.util.prefs.Preferences
+import androidx.compose.ui.text.style.TextOverflow
 
 data class PaperTemplate(val name: String, val width: Float, val height: Float, val labelsPerPage: Int)
 
@@ -450,9 +452,10 @@ fun TableCellTextField(value: String, onValueChange: (String) -> Unit, modifier:
     )
 }
 
-fun generateBarcodeBitmap(data: String): ImageBitmap {
-    val writer = Code128Writer()
-    val matrix = writer.encode(data, BarcodeFormat.CODE_128, 600, 150)
+fun generateQRCodeBitmap(data: String): ImageBitmap {
+    val writer = QRCodeWriter()
+    val hints = mapOf(com.google.zxing.EncodeHintType.MARGIN to 1)
+    val matrix = writer.encode(data, BarcodeFormat.QR_CODE, 300, 300, hints)
     val width = matrix.width
     val height = matrix.height
     val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
@@ -474,24 +477,38 @@ fun LabelPreviewDialog(item: ProductItem, template: PaperTemplate, onDismiss: ()
             val ratio = singleLabelHeight / template.width
             val heightDp = widthDp * ratio
             
-            Column(Modifier.width(widthDp).height(heightDp).background(Color.White).padding(horizontal = 12.dp, vertical = 12.dp)) {
-                val barcodeBitmap = remember(item.barcode) { 
-                    try { generateBarcodeBitmap(item.barcode) } catch (e: Exception) { null } 
+            val paddingX = widthDp * 0.08f
+            val paddingY = heightDp * 0.12f
+            
+            Row(Modifier.width(widthDp).height(heightDp).background(Color.White).padding(horizontal = paddingX, vertical = paddingY)) {
+                // Left Column
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                    Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("分类: ${item.category}", style = MaterialTheme.typography.labelMedium, color = Color.DarkGray)
+                    Text("材质: ${item.material}", style = MaterialTheme.typography.labelMedium, color = Color.DarkGray)
+                    Text("规格: ${item.spec}", style = MaterialTheme.typography.labelMedium, color = Color.DarkGray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("RMB ", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 1.dp))
+                        Text(item.price, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                    }
                 }
-                if (barcodeBitmap != null) {
-                    Image(barcodeBitmap, contentDescription = "Barcode", modifier = Modifier.height(heightDp * 0.25f).fillMaxWidth().padding(horizontal = 12.dp), contentScale = ContentScale.FillBounds)
+                
+                Spacer(Modifier.width(8.dp)) // Safe gap
+                
+                // Right Column (QR Code)
+                Column(Modifier.fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
+                    val qrBitmap = remember(item.barcode) { 
+                        try { generateQRCodeBitmap(item.barcode) } catch (e: Exception) { null } 
+                    }
+                    if (qrBitmap != null) {
+                        Image(
+                            bitmap = qrBitmap, 
+                            contentDescription = "QR Code", 
+                            modifier = Modifier.padding(top = 2.dp).weight(1f, fill = false).aspectRatio(1f)
+                        )
+                    }
+                    Text(item.barcode, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp, top = 2.dp))
                 }
-                Text(item.barcode, style = MaterialTheme.typography.labelSmall, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                
-                Spacer(Modifier.height(heightDp * 0.02f))
-                Divider(color = Color.Gray, thickness = 1.dp)
-                Spacer(Modifier.height(heightDp * 0.02f))
-                
-                Text(item.name, style = MaterialTheme.typography.labelMedium)
-                Text("分 类 : ${item.category}", style = MaterialTheme.typography.labelSmall)
-                Text("材 质 : ${item.material}", style = MaterialTheme.typography.labelSmall)
-                Text("规 格 : ${item.spec}", style = MaterialTheme.typography.labelSmall)
-                Text("价 格 : ￥${item.price}", style = MaterialTheme.typography.labelSmall)
             }
         }
     }

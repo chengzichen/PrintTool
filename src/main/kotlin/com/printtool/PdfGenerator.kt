@@ -8,7 +8,7 @@ import com.lowagie.text.pdf.PdfWriter
 import com.lowagie.text.Image as PdfImage
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.client.j2se.MatrixToImageWriter
-import com.google.zxing.oned.Code128Writer
+import com.google.zxing.qrcode.QRCodeWriter
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -52,10 +52,9 @@ object PdfGenerator {
         val bf = baseFont ?: throw RuntimeException("Could not load any Chinese font")
         
         val cellH = paperHeight / labelsPerPage
-        val bcWidth = paperWidth * 0.9f
-        val bcHeight = 10 * MM_TO_PT // Reduced from 14mm
-        val textLeftOffset = paperWidth * 0.1f // 10% of width
-        val barcodeLeftOffset = (paperWidth - bcWidth) / 2f
+        val contentWidth = 45 * MM_TO_PT
+        val contentHeight = 28 * MM_TO_PT
+        
         val positions = (0 until labelsPerPage).map { (labelsPerPage - 1 - it) * cellH }
         
         val expandedItems = items.flatMap { item -> List(item.copies) { item } }
@@ -78,39 +77,62 @@ object PdfGenerator {
             for (i in pageItems.indices) {
                 val item = pageItems[i]
                 val pos = positions[i]
+                val cellTopY = pos + cellH
                 
-                val bcY = pos + cellH - bcHeight - 1 * MM_TO_PT // reduced top margin to 1mm
+                // Calculate center of the cell
+                val marginX = paperWidth * 0.08f // 8% horizontal margin
+                val marginY = cellH * 0.12f // 12% vertical margin
                 
-                // Generate Barcode image
-                val barcodeBytes = generateBarcode(item.barcode)
-                val pdfImg = PdfImage.getInstance(barcodeBytes)
-                pdfImg.setAbsolutePosition(barcodeLeftOffset, bcY)
-                pdfImg.scaleAbsolute(bcWidth, bcHeight)
+                // --- Right Column (QR Code) ---
+                val qrSize = 20 * MM_TO_PT
+                val qrX = paperWidth - marginX - qrSize
+                val qrY = cellTopY - marginY - qrSize // Top of QR aligns with top margin
+                
+                val qrBytes = generateQRCode(item.barcode)
+                val pdfImg = PdfImage.getInstance(qrBytes)
+                pdfImg.setAbsolutePosition(qrX, qrY)
+                pdfImg.scaleAbsolute(qrSize, qrSize)
                 cb.addImage(pdfImg)
                 
-                // Draw texts
                 cb.beginText()
-                cb.setFontAndSize(bf, 7.5f) // Reduced barcode font
-                // Center the text perfectly under the barcode
-                cb.showTextAligned(PdfContentByte.ALIGN_CENTER, item.barcode, barcodeLeftOffset + bcWidth / 2, bcY - 3f * MM_TO_PT, 0f)
+                cb.setGrayFill(0.3f)
+                cb.setFontAndSize(bf, 7.5f)
+                val qrTextY = qrY - 4f * MM_TO_PT
+                cb.showTextAligned(PdfContentByte.ALIGN_CENTER, item.barcode, qrX + qrSize / 2, qrTextY, 0f)
                 cb.endText()
                 
-                cb.setRGBColorStroke(128, 128, 128)
-                cb.moveTo(textLeftOffset, bcY - 4.5f * MM_TO_PT)
-                cb.lineTo(paperWidth - textLeftOffset, bcY - 4.5f * MM_TO_PT)
-                cb.stroke()
-                cb.setRGBColorStroke(0, 0, 0)
-                
+                // --- Left Column (Text) ---
+                val textX = marginX
                 cb.beginText()
-                cb.setFontAndSize(bf, 8.5f) // Reduced main text font
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.name, textLeftOffset, bcY - 8f * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "分 类 : ${item.category}", textLeftOffset, bcY - 11.5f * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "材 质 : ${item.material}", textLeftOffset, bcY - 15f * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "规 格 : ${item.spec}", textLeftOffset, bcY - 18.5f * MM_TO_PT, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "价 格 : ￥${item.price}", textLeftOffset, bcY - 22.0f * MM_TO_PT, 0f)
+                cb.setGrayFill(0f)
+                cb.setFontAndSize(bf, 12f)
+                val nameBaselineY = cellTopY - marginY - 3.5f * MM_TO_PT // Aligns roughly with top of QR
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.name, textX, nameBaselineY, 0f)
+                
+                val priceBaselineY = qrTextY // Perfectly align price with QR text
+                
+                // Calculate dynamic vertical spacing for details
+                val availableSpace = nameBaselineY - priceBaselineY
+                val step = availableSpace / 4f
+                
+                cb.setGrayFill(0.2f)
+                cb.setFontAndSize(bf, 8.5f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "分类: ${item.category}", textX, nameBaselineY - step, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "材质: ${item.material}", textX, nameBaselineY - 2 * step, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "规格: ${item.spec}", textX, nameBaselineY - 3 * step, 0f)
+                
+                cb.setGrayFill(0f)
+                cb.setFontAndSize(bf, 9f) 
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "RMB ", textX, priceBaselineY, 0f)
+                val rmbWidth = bf.getWidthPoint("RMB ", 9f)
+                cb.setFontAndSize(bf, 15f) // Safely sized to avoid clipping
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.price, textX + rmbWidth, priceBaselineY, 0f)
                 cb.endText()
             }
-            document.newPage()
+            
+            if (pageIndex < totalChunks - 1) {
+                document.newPage()
+            }
         }
         
         onProgress?.invoke(totalChunks, totalChunks)
@@ -118,11 +140,13 @@ object PdfGenerator {
         document.close()
     }
     
-    private fun generateBarcode(data: String): ByteArray {
-        val writer = Code128Writer()
-        val bitMatrix = writer.encode(data, BarcodeFormat.CODE_128, 900, 200)
+    private fun generateQRCode(data: String): ByteArray {
+        val writer = QRCodeWriter()
+        // QR Code with a quiet zone (margin) of 1
+        val hints = mapOf(com.google.zxing.EncodeHintType.MARGIN to 1)
+        val bitMatrix = writer.encode(data, com.google.zxing.BarcodeFormat.QR_CODE, 300, 300, hints)
         val baos = ByteArrayOutputStream()
-        MatrixToImageWriter.writeToStream(bitMatrix, "PNG", baos)
+        com.google.zxing.client.j2se.MatrixToImageWriter.writeToStream(bitMatrix, "PNG", baos)
         return baos.toByteArray()
     }
 }

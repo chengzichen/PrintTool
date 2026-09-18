@@ -35,10 +35,14 @@ object Printer {
                 throw RuntimeException("未在系统中找到指定打印机！(Printer not found)")
             }
 
-            val printable = PDFPrintable(document, Scaling.ACTUAL_SIZE)
-            printJob.setPrintable(printable)
+            val attributes = javax.print.attribute.HashPrintRequestAttributeSet()
             
-            printJob.print() // Silent print to selected printer
+            // Use PDFPageable to handle dynamic media boxes across multiple pages automatically
+            // This prevents Mac label printer drivers from dropping pages due to size mismatches
+            val pageable = org.apache.pdfbox.printing.PDFPageable(document, org.apache.pdfbox.printing.Orientation.AUTO, false, 0f)
+            printJob.setPageable(pageable)
+            
+            printJob.print(attributes) // Silent print to selected printer
         } finally {
             document.close()
         }
