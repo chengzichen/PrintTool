@@ -83,10 +83,40 @@ object PdfGenerator {
                 val marginX = paperWidth * 0.08f // 8% horizontal margin
                 val marginY = cellH * 0.12f // 12% vertical margin
                 
+                // --- Brand Header Banner ---
+                val headerTop = cellTopY - marginY
+                
+                // Thin top line
+                cb.setLineWidth(0.5f)
+                cb.setGrayStroke(0f)
+                cb.moveTo(marginX, headerTop)
+                cb.lineTo(paperWidth - marginX, headerTop)
+                cb.stroke()
+                
+                // Brand Text
+                val brandBaselineY = headerTop - 11f
+                cb.beginText()
+                cb.setGrayFill(0f)
+                cb.setFontAndSize(bf, 11f)
+                cb.setCharacterSpacing(7f) // Extreme tracking for high-end look
+                cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "一颗小柿", paperWidth / 2, brandBaselineY, 0f)
+                cb.setCharacterSpacing(0f) // reset
+                cb.endText()
+                
+                // Thick bottom line
+                val lineY = brandBaselineY - 5f
+                cb.setLineWidth(2f) // Very bold line
+                cb.moveTo(marginX, lineY)
+                cb.lineTo(paperWidth - marginX, lineY)
+                cb.stroke()
+                
+                // --- Layout Variables ---
+                val contentTop = lineY - 8f
+                
                 // --- Right Column (QR Code) ---
-                val qrSize = 20 * MM_TO_PT
+                val qrSize = 18f * MM_TO_PT // Slightly smaller to fit banner
                 val qrX = paperWidth - marginX - qrSize
-                val qrY = cellTopY - marginY - qrSize // Top of QR aligns with top margin
+                val qrY = contentTop - qrSize // Top of QR aligns with contentTop
                 
                 val qrBytes = generateQRCode(item.barcode)
                 val pdfImg = PdfImage.getInstance(qrBytes)
@@ -97,7 +127,7 @@ object PdfGenerator {
                 cb.beginText()
                 cb.setGrayFill(0.3f)
                 cb.setFontAndSize(bf, 7.5f)
-                val qrTextY = qrY - 4f * MM_TO_PT
+                val qrTextY = qrY - 3f * MM_TO_PT
                 cb.showTextAligned(PdfContentByte.ALIGN_CENTER, item.barcode, qrX + qrSize / 2, qrTextY, 0f)
                 cb.endText()
                 
@@ -105,8 +135,8 @@ object PdfGenerator {
                 val textX = marginX
                 cb.beginText()
                 cb.setGrayFill(0f)
-                cb.setFontAndSize(bf, 12f)
-                val nameBaselineY = cellTopY - marginY - 3.5f * MM_TO_PT // Aligns roughly with top of QR
+                cb.setFontAndSize(bf, 11f)
+                val nameBaselineY = contentTop - 10f
                 cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.name, textX, nameBaselineY, 0f)
                 
                 val priceBaselineY = qrTextY // Perfectly align price with QR text
@@ -125,7 +155,7 @@ object PdfGenerator {
                 cb.setFontAndSize(bf, 9f) 
                 cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "RMB ", textX, priceBaselineY, 0f)
                 val rmbWidth = bf.getWidthPoint("RMB ", 9f)
-                cb.setFontAndSize(bf, 15f) // Safely sized to avoid clipping
+                cb.setFontAndSize(bf, 16f) // Massive bold price
                 cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.price, textX + rmbWidth, priceBaselineY, 0f)
                 cb.endText()
             }

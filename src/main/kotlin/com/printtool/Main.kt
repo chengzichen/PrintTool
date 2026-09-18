@@ -47,6 +47,8 @@ import androidx.compose.ui.onExternalDrag
 import androidx.compose.ui.unit.sp
 import java.util.prefs.Preferences
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.em
 
 data class PaperTemplate(val name: String, val width: Float, val height: Float, val labelsPerPage: Int)
 
@@ -469,45 +471,66 @@ fun generateQRCodeBitmap(data: String): ImageBitmap {
 
 @Composable
 fun LabelPreviewDialog(item: ProductItem, template: PaperTemplate, onDismiss: () -> Unit) {
-    val state = rememberDialogState(width = 400.dp, height = 400.dp)
+    val state = rememberDialogState(width = 500.dp, height = 400.dp)
     DialogWindow(onCloseRequest = onDismiss, title = "标签预览", state = state) {
         Box(Modifier.fillMaxSize().background(Color.LightGray), contentAlignment = Alignment.Center) {
-            val widthDp = 320.dp
             val singleLabelHeight = template.height / template.labelsPerPage
-            val ratio = singleLabelHeight / template.width
-            val heightDp = widthDp * ratio
+            val ratio = template.width / singleLabelHeight
+            
+            // Fix height instead of width to prevent vertical squishing on wide labels
+            val heightDp = 220.dp
+            val widthDp = heightDp * ratio
             
             val paddingX = widthDp * 0.08f
             val paddingY = heightDp * 0.12f
             
-            Row(Modifier.width(widthDp).height(heightDp).background(Color.White).padding(horizontal = paddingX, vertical = paddingY)) {
-                // Left Column
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-                    Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("分类: ${item.category}", style = MaterialTheme.typography.labelMedium, color = Color.DarkGray)
-                    Text("材质: ${item.material}", style = MaterialTheme.typography.labelMedium, color = Color.DarkGray)
-                    Text("规格: ${item.spec}", style = MaterialTheme.typography.labelMedium, color = Color.DarkGray, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text("RMB ", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 1.dp))
-                        Text(item.price, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                    }
+            Column(Modifier.width(widthDp).height(heightDp).background(Color.White).padding(horizontal = paddingX, vertical = paddingY)) {
+                // Header Banner
+                Divider(color = Color.Black, thickness = 0.5.dp)
+                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "一颗小柿",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.em
+                        ),
+                        color = Color.Black
+                    )
                 }
+                Divider(color = Color.Black, thickness = 2.dp)
                 
-                Spacer(Modifier.width(8.dp)) // Safe gap
+                Spacer(Modifier.height(8.dp))
                 
-                // Right Column (QR Code)
-                Column(Modifier.fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
-                    val qrBitmap = remember(item.barcode) { 
-                        try { generateQRCodeBitmap(item.barcode) } catch (e: Exception) { null } 
+                // Main Content
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    // Left Column
+                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                        Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("分类: ${item.category}", style = MaterialTheme.typography.labelSmall, color = Color.DarkGray)
+                        Text("材质: ${item.material}", style = MaterialTheme.typography.labelSmall, color = Color.DarkGray)
+                        Text("规格: ${item.spec}", style = MaterialTheme.typography.labelSmall, color = Color.DarkGray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text("RMB ", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 2.dp))
+                            Text(item.price, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                        }
                     }
-                    if (qrBitmap != null) {
-                        Image(
-                            bitmap = qrBitmap, 
-                            contentDescription = "QR Code", 
-                            modifier = Modifier.padding(top = 2.dp).weight(1f, fill = false).aspectRatio(1f)
-                        )
+                    
+                    Spacer(Modifier.width(8.dp)) // Safe gap
+                    
+                    // Right Column (QR Code)
+                    Column(Modifier.fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
+                        val qrBitmap = remember(item.barcode) { 
+                            try { generateQRCodeBitmap(item.barcode) } catch (e: Exception) { null } 
+                        }
+                        if (qrBitmap != null) {
+                            Image(
+                                bitmap = qrBitmap, 
+                                contentDescription = "QR Code", 
+                                modifier = Modifier.padding(top = 2.dp).weight(1f, fill = false).aspectRatio(1f)
+                            )
+                        }
+                        Text(item.barcode, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp, top = 2.dp))
                     }
-                    Text(item.barcode, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp, top = 2.dp))
                 }
             }
         }
