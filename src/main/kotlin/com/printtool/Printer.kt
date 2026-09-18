@@ -39,7 +39,7 @@ object Printer {
             
             // Use PDFPageable to handle dynamic media boxes across multiple pages automatically
             // This prevents Mac label printer drivers from dropping pages due to size mismatches
-            val pageable = org.apache.pdfbox.printing.PDFPageable(document, org.apache.pdfbox.printing.Orientation.AUTO, false, 0f)
+            val pageable = org.apache.pdfbox.printing.PDFPageable(document, org.apache.pdfbox.printing.Orientation.PORTRAIT, false, 0f)
             printJob.setPageable(pageable)
             
             printJob.print(attributes) // Silent print to selected printer
