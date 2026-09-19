@@ -503,7 +503,7 @@ fun LabelPreviewDialog(item: ProductItem, template: PaperTemplate, onDismiss: ()
                         Image(
                             bitmap = logoBitmap,
                             contentDescription = "Logo",
-                            modifier = Modifier.size(42.dp).padding(end = 10.dp) 
+                            modifier = Modifier.size(28.dp).padding(end = 10.dp) 
                         )
                     }
                     

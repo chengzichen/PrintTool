@@ -91,7 +91,7 @@ object PdfGenerator {
                 val brandFontSize = 14f
                 val tracking = 4f
                 val brandWidth = bf.getWidthPoint(brandText, brandFontSize) + (brandText.length - 1) * tracking
-                val iconSize = 40f // Extremely massive logo, pushed to physical limits
+                val iconSize = 26f // Refined size for elegant proportion
                 val gap = 10f 
                 val totalWidth = iconSize + gap + brandWidth
                 
