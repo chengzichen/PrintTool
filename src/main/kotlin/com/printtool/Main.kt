@@ -482,21 +482,42 @@ fun LabelPreviewDialog(item: ProductItem, template: PaperTemplate, onDismiss: ()
             val widthDp = heightDp * ratio
             
             val paddingX = widthDp * 0.08f
-            val paddingY = heightDp * 0.12f
+            val paddingBottom = heightDp * 0.12f
+            val paddingTop = 4.dp // Very small top margin, matching the 2pt margin in PDF
             
-            Column(Modifier.width(widthDp).height(heightDp).background(Color.White).padding(horizontal = paddingX, vertical = paddingY)) {
-                // Header Banner
-                Divider(color = Color.Black, thickness = 0.5.dp)
-                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+            Column(Modifier.width(widthDp).height(heightDp).background(Color.White).padding(start = paddingX, end = paddingX, top = paddingTop, bottom = paddingBottom)) {
+                // Header Banner (Centered, prominent logo and text)
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 6.dp).padding(end = 16.dp), // Shift entire block left visually
+                    horizontalArrangement = Arrangement.Center, 
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val logoBitmap = remember {
+                        try {
+                            val stream = object{}.javaClass.getResourceAsStream("/shijimao_logo.png")
+                            stream?.readBytes()?.let { org.jetbrains.skia.Image.makeFromEncoded(it).toComposeImageBitmap() }
+                        } catch (e: Exception) { null }
+                    }
+                    
+                    if (logoBitmap != null) {
+                        Image(
+                            bitmap = logoBitmap,
+                            contentDescription = "Logo",
+                            modifier = Modifier.size(42.dp).padding(end = 10.dp) 
+                        )
+                    }
+                    
                     Text(
                         text = "一颗小柿",
                         style = MaterialTheme.typography.titleMedium.copy(
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 0.5.em
+                            letterSpacing = 0.2.em
                         ),
                         color = Color.Black
                     )
                 }
+                
                 Divider(color = Color.Black, thickness = 2.dp)
                 
                 Spacer(Modifier.height(8.dp))

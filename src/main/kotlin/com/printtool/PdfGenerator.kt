@@ -84,27 +84,49 @@ object PdfGenerator {
                 val marginY = cellH * 0.08f // 8% vertical margin gives more breathing room
                 
                 // --- Brand Header Banner ---
-                val headerTop = cellTopY - marginY
+                val headerTop = cellTopY - 2f // Pushed to the absolute top edge to maximize logo size
                 
-                // Thin top line
-                cb.setLineWidth(0.5f)
-                cb.setGrayStroke(0f)
-                cb.moveTo(marginX, headerTop)
-                cb.lineTo(paperWidth - marginX, headerTop)
-                cb.stroke()
+                // Brand Logo and Text (Centered horizontally)
+                val brandText = "一颗小柿"
+                val brandFontSize = 14f
+                val tracking = 4f
+                val brandWidth = bf.getWidthPoint(brandText, brandFontSize) + (brandText.length - 1) * tracking
+                val iconSize = 40f // Extremely massive logo, pushed to physical limits
+                val gap = 10f 
+                val totalWidth = iconSize + gap + brandWidth
                 
-                // Brand Text
-                val brandBaselineY = headerTop - 11f
+                // Shift the entire group left by 8pt to visually balance the heavy logo on the left
+                val startX = (paperWidth - totalWidth) / 2 - 8f
+                
+                val logoX = startX
+                val logoY = headerTop - iconSize
+                
+                // Vertically center text relative to logo (adjusting for font ascender)
+                val brandBaselineY = logoY + (iconSize - brandFontSize) / 2f - 3f
+                
+                try {
+                    val imgStream = this::class.java.getResourceAsStream("/shijimao_logo.png")
+                    if (imgStream != null) {
+                        val bytes = imgStream.readBytes()
+                        val pdfImg = PdfImage.getInstance(bytes)
+                        pdfImg.setAbsolutePosition(logoX, logoY)
+                        pdfImg.scaleAbsolute(iconSize, iconSize)
+                        cb.addImage(pdfImg)
+                    }
+                } catch (e: Exception) {
+                    // Ignore if image not found
+                }
+                
                 cb.beginText()
                 cb.setGrayFill(0f)
-                cb.setFontAndSize(bf, 11f)
-                cb.setCharacterSpacing(7f) // Extreme tracking for high-end look
-                cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "一颗小柿", paperWidth / 2, brandBaselineY, 0f)
+                cb.setFontAndSize(bf, brandFontSize)
+                cb.setCharacterSpacing(tracking) 
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, brandText, startX + iconSize + gap, brandBaselineY, 0f)
                 cb.setCharacterSpacing(0f) // reset
                 cb.endText()
                 
                 // Thick bottom line
-                val lineY = brandBaselineY - 5f
+                val lineY = logoY - 4f
                 cb.setLineWidth(2f) // Very bold line
                 cb.moveTo(marginX, lineY)
                 cb.lineTo(paperWidth - marginX, lineY)
@@ -114,7 +136,7 @@ object PdfGenerator {
                 val contentTop = lineY - 8f
                 
                 // Pin QR Code to bottom margin
-                val qrSize = 18f * MM_TO_PT
+                val qrSize = 16f * MM_TO_PT // Slightly reduced to fit massive header
                 val qrX = paperWidth - marginX - qrSize
                 val qrTextY = pos + marginY // Bottom align with margin
                 val qrY = qrTextY + 9f // Place QR code just above its text
