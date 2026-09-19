@@ -81,7 +81,7 @@ object PdfGenerator {
                 
                 // Calculate center of the cell
                 val marginX = paperWidth * 0.08f // 8% horizontal margin
-                val marginY = cellH * 0.12f // 12% vertical margin
+                val marginY = cellH * 0.08f // 8% vertical margin gives more breathing room
                 
                 // --- Brand Header Banner ---
                 val headerTop = cellTopY - marginY
@@ -113,10 +113,11 @@ object PdfGenerator {
                 // --- Layout Variables ---
                 val contentTop = lineY - 8f
                 
-                // --- Right Column (QR Code) ---
-                val qrSize = 18f * MM_TO_PT // Slightly smaller to fit banner
+                // Pin QR Code to bottom margin
+                val qrSize = 18f * MM_TO_PT
                 val qrX = paperWidth - marginX - qrSize
-                val qrY = contentTop - qrSize // Top of QR aligns with contentTop
+                val qrTextY = pos + marginY // Bottom align with margin
+                val qrY = qrTextY + 9f // Place QR code just above its text
                 
                 val qrBytes = generateQRCode(item.barcode)
                 val pdfImg = PdfImage.getInstance(qrBytes)
@@ -127,35 +128,56 @@ object PdfGenerator {
                 cb.beginText()
                 cb.setGrayFill(0.3f)
                 cb.setFontAndSize(bf, 7.5f)
-                val qrTextY = qrY - 3f * MM_TO_PT
                 cb.showTextAligned(PdfContentByte.ALIGN_CENTER, item.barcode, qrX + qrSize / 2, qrTextY, 0f)
                 cb.endText()
                 
                 // --- Left Column (Text) ---
                 val textX = marginX
+                val maxTextWidth = qrX - textX - 4f // Leave 4pt padding before QR code
+                
+                val truncate = { text: String, fontSize: Float ->
+                    if (bf.getWidthPoint(text, fontSize) <= maxTextWidth) text
+                    else {
+                        var temp = text
+                        while (temp.isNotEmpty() && bf.getWidthPoint("$temp...", fontSize) > maxTextWidth) {
+                            temp = temp.dropLast(1)
+                        }
+                        "$temp..."
+                    }
+                }
+
                 cb.beginText()
                 cb.setGrayFill(0f)
                 cb.setFontAndSize(bf, 11f)
                 val nameBaselineY = contentTop - 10f
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.name, textX, nameBaselineY, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, truncate(item.name, 11f), textX, nameBaselineY, 0f)
                 
                 val priceBaselineY = qrTextY // Perfectly align price with QR text
                 
                 // Calculate dynamic vertical spacing for details
                 val availableSpace = nameBaselineY - priceBaselineY
-                val step = availableSpace / 4f
+                // Use a weighted distribution: 1 unit between text lines, 1.5 units above the Price
+                // Total units = 1 + 1 + 1 + 1.5 = 4.5
+                val unit = availableSpace / 4.5f
                 
                 cb.setGrayFill(0.2f)
                 cb.setFontAndSize(bf, 8.5f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "分类: ${item.category}", textX, nameBaselineY - step, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "材质: ${item.material}", textX, nameBaselineY - 2 * step, 0f)
-                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "规格: ${item.spec}", textX, nameBaselineY - 3 * step, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, truncate("分类: ${item.category}", 8.5f), textX, nameBaselineY - unit, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, truncate("材质: ${item.material}", 8.5f), textX, nameBaselineY - 2 * unit, 0f)
+                cb.showTextAligned(PdfContentByte.ALIGN_LEFT, truncate("规格: ${item.spec}", 8.5f), textX, nameBaselineY - 3 * unit, 0f)
                 
                 cb.setGrayFill(0f)
                 cb.setFontAndSize(bf, 9f) 
                 cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "RMB ", textX, priceBaselineY, 0f)
                 val rmbWidth = bf.getWidthPoint("RMB ", 9f)
-                cb.setFontAndSize(bf, 16f) // Massive bold price
+                
+                // Auto-scale price font size to prevent overlapping QR code
+                val maxPriceWidth = maxTextWidth - rmbWidth
+                var priceFontSize = 16f
+                while (priceFontSize > 8f && bf.getWidthPoint(item.price, priceFontSize) > maxPriceWidth) {
+                    priceFontSize -= 0.5f
+                }
+                cb.setFontAndSize(bf, priceFontSize)
                 cb.showTextAligned(PdfContentByte.ALIGN_LEFT, item.price, textX + rmbWidth, priceBaselineY, 0f)
                 cb.endText()
             }
