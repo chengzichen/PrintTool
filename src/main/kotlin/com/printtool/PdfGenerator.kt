@@ -36,7 +36,13 @@ object PdfGenerator {
         val fontPaths = listOf(
             "C:/Windows/Fonts/msyh.ttc,0",
             "C:/Windows/Fonts/simsun.ttc,0",
-            "C:/Windows/Fonts/simhei.ttf"
+            "C:/Windows/Fonts/simhei.ttf",
+            "/System/Library/Fonts/PingFang.ttc,0",
+            "/System/Library/Fonts/Hiragino Sans GB.ttc,0",
+            "/System/Library/Fonts/STHeiti Light.ttc,0",
+            "/Library/Fonts/Arial Unicode.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc,0",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"
         )
         
         var baseFont: BaseFont? = null

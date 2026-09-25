@@ -33,12 +33,16 @@ import java.awt.Color as AwtColor
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
 import java.net.URI
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
 import androidx.compose.ui.DragData
@@ -51,6 +55,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.em
 
 data class PaperTemplate(val name: String, val width: Float, val height: Float, val labelsPerPage: Int)
+data class RemotePrintQueueItem(val job: RemotePrintJob, val status: String)
 
 @Composable
 fun App() {
@@ -59,11 +64,19 @@ fun App() {
     var printProgress by remember { mutableStateOf(0f) }
     var statusMessage by remember { mutableStateOf("就绪 (Ready)") }
     var previewItem by remember { mutableStateOf<ProductItem?>(null) }
+    var remotePrintQueue by remember { mutableStateOf<List<RemotePrintQueueItem>>(emptyList()) }
+    val activeRemoteJobId = remember { AtomicLong(-1L) }
+    val activeRemotePrintTask = remember { AtomicReference<Job?>(null) }
     
     var showBatchPriceDialog by remember { mutableStateOf(false) }
     var batchPriceInput by remember { mutableStateOf("") }
+    var showPairingDialog by remember { mutableStateOf(false) }
+    var isPairing by remember { mutableStateOf(false) }
     
     val prefs = remember { Preferences.userRoot().node("com.printtool.config") }
+    val relayClient = remember { PrinterRelayClient(prefs) }
+    var pairingCodeInput by remember { mutableStateOf("") }
+    var relayState by remember { mutableStateOf(if (relayClient.isPaired()) "已绑定，等待连接" else "未绑定打印设备") }
     
     var printers by remember { mutableStateOf(emptyList<String>()) }
     var selectedPrinter by remember { mutableStateOf<String?>(null) }
@@ -80,6 +93,104 @@ fun App() {
     var expandedTemplate by remember { mutableStateOf(false) }
     
     val coroutineScope = rememberCoroutineScope()
+
+    val latestPrinter by rememberUpdatedState(selectedPrinter)
+    val latestTemplate by rememberUpdatedState(currentTemplate)
+
+    suspend fun importItemsFromFile(file: File): List<ProductItem> {
+        val parsedItems = withContext(Dispatchers.IO) { CsvParser.parse(file) }
+        if (parsedItems.isEmpty()) throw IllegalArgumentException("文件没有有效条码")
+        items = parsedItems
+        return parsedItems
+    }
+
+    suspend fun handleRemotePrintJob(job: RemotePrintJob, manualPrint: Boolean = false) {
+        fun updateQueue(status: String) {
+            remotePrintQueue = remotePrintQueue.map { item ->
+                if (item.job.jobId == job.jobId) item.copy(status = status) else item
+            }
+        }
+        updateQueue("已接收，正在处理")
+        relayClient.sendStatus(job.jobId, "print.job.accepted")
+        try {
+            if (job.type != "barcode_batch" || job.format != "csv" || job.content.isBlank()) {
+                throw IllegalArgumentException("不支持的打印任务格式")
+            }
+            isProcessing = true
+            statusMessage = "收到云端打印任务 #${job.jobId}，正在解析..."
+            val csvFile = withContext(Dispatchers.IO) {
+                File.createTempFile("cloud_print_", ".csv").also { it.writeText(job.content, Charsets.UTF_8) }
+            }
+            val remoteItems = try {
+                importItemsFromFile(csvFile)
+            } finally {
+                csvFile.delete()
+            }
+            if (activeRemoteJobId.get() != job.jobId) return
+            if (!job.autoPrint && !manualPrint) {
+                updateQueue("等待手动打印")
+                statusMessage = "云端任务 #${job.jobId} 已传输，等待手动打印"
+                isProcessing = false
+                return
+            }
+            if (activeRemoteJobId.get() != job.jobId) return
+            val printerName = latestPrinter ?: throw IllegalStateException("未选择电脑打印机")
+            relayClient.sendStatus(job.jobId, "print.job.printing")
+            updateQueue("正在打印")
+            val printTemplate = PaperTemplate(
+                if (job.paperWidthMm > 0) job.paperTemplate.ifBlank { "云端纸张" } else latestTemplate.name,
+                if (job.paperWidthMm > 0) job.paperWidthMm else latestTemplate.width,
+                if (job.paperHeightMm > 0) job.paperHeightMm else latestTemplate.height,
+                if (job.labelsPerPage > 0) job.labelsPerPage else latestTemplate.labelsPerPage
+            )
+            val tempFile = withContext(Dispatchers.IO) {
+                val pdfFile = File.createTempFile("cloud_print_", ".pdf")
+                PdfGenerator.createPdf(
+                    remoteItems,
+                    pdfFile,
+                    paperWidthMm = printTemplate.width,
+                    paperHeightMm = printTemplate.height,
+                    labelsPerPage = printTemplate.labelsPerPage
+                )
+                pdfFile
+            }
+            statusMessage = "正在打印云端任务 #${job.jobId}..."
+            withContext(Dispatchers.IO) { Printer.printPdf(tempFile, printerName) }
+            tempFile.delete()
+            relayClient.sendStatus(job.jobId, "print.job.completed")
+            updateQueue("打印完成")
+            statusMessage = "云端任务 #${job.jobId} 打印完成"
+        } catch (e: CancellationException) {
+            // A newer cloud task replaced this task. Do not report it as a
+            // printing failure or allow it to update the current task state.
+            throw e
+        } catch (e: Exception) {
+            relayClient.sendStatus(job.jobId, "print.job.failed", e.message ?: "打印失败")
+            updateQueue("打印失败：${e.message ?: "未知错误"}")
+            statusMessage = "云端任务 #${job.jobId} 打印失败: ${e.message}"
+        } finally {
+            isProcessing = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        relayClient.onState = { state -> relayState = state }
+        relayClient.onJob = { job ->
+            activeRemotePrintTask.getAndSet(null)?.cancel()
+            activeRemoteJobId.set(job.jobId)
+            remotePrintQueue = listOf(RemotePrintQueueItem(job, "已接收，排队打印"))
+            activeRemotePrintTask.set(coroutineScope.launch {
+                // The server cancels older pending/delivered jobs when a new
+                // job is submitted. Keep the UI consistent and show only the
+                // current print data instead of stale unprinted jobs.
+                handleRemotePrintJob(job)
+            })
+        }
+        if (relayClient.isPaired()) {
+            relayState = "正在自动连接..."
+            relayClient.connect()
+        }
+    }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -127,8 +238,7 @@ fun App() {
                                 path = java.net.URLDecoder.decode(path, "UTF-8")
                                 
                                 val file = File(path)
-                                val parsedItems = withContext(Dispatchers.IO) { CsvParser.parse(file) }
-                                items = parsedItems
+                                importItemsFromFile(file)
                                 statusMessage = "成功读取 ${items.size} 条记录"
                             } catch (e: Exception) {
                                 statusMessage = "读取失败: ${e.message}"
@@ -153,8 +263,7 @@ fun App() {
                                 isProcessing = true
                                 statusMessage = "正在读取文件..."
                                 try {
-                                    val parsedItems = withContext(Dispatchers.IO) { CsvParser.parse(file) }
-                                    items = parsedItems
+                                    importItemsFromFile(file)
                                     statusMessage = "成功读取 ${items.size} 条记录"
                                 } catch (e: Exception) {
                                     statusMessage = "读取失败: ${e.message}"
@@ -173,11 +282,51 @@ fun App() {
                 OutlinedButton(onClick = { items = emptyList() }) {
                     Text("清空列表")
                 }
+
+                Button(
+                    onClick = {
+                        if (relayClient.isPaired()) {
+                            relayState = "正在重新连接..."
+                            relayClient.connect()
+                        } else {
+                            showPairingDialog = true
+                        }
+                    },
+                    enabled = !isProcessing
+                ) {
+                    Text(if (relayClient.isPaired()) "重新连接云端设备" else "绑定云端设备")
+                }
+                Text(
+                    "连接状态：$relayState",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (relayState.contains("失败")) Color.Red else Color.Unspecified
+                )
             }
             
             Spacer(Modifier.height(8.dp))
             
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (remotePrintQueue.isNotEmpty()) {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("云端打印列表", fontWeight = FontWeight.Bold)
+                            remotePrintQueue.takeLast(6).reversed().forEach { item ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("任务 #${item.job.jobId} · ${item.job.fileName.ifBlank { "条码文件" }}", style = MaterialTheme.typography.bodySmall)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text(item.status, style = MaterialTheme.typography.bodySmall, color = if (item.status.startsWith("打印失败")) Color.Red else Color.Unspecified)
+                                        if (item.status == "等待手动打印") {
+                                            TextButton(onClick = { coroutineScope.launch { handleRemotePrintJob(item.job, manualPrint = true) } }) {
+                                                Text("打印")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Row 1: Settings
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -437,6 +586,52 @@ fun App() {
                         OutlinedButton(onClick = { showBatchPriceDialog = false }) {
                             Text("取消")
                         }
+                    }
+                }
+            }
+        }
+
+        if (showPairingDialog) {
+            DialogWindow(
+                onCloseRequest = { if (!isPairing) showPairingDialog = false },
+                title = "绑定云端打印设备",
+                state = rememberDialogState(width = 420.dp, height = 320.dp)
+            ) {
+                Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text("云端打印设备绑定", fontWeight = FontWeight.Bold)
+                    Text("请先在小程序“打印设备”页面生成主体永久识别码。确认绑定成功后，打印程序才会连接服务器。", style = MaterialTheme.typography.bodySmall)
+                    Text("请输入小程序生成的 6 位主体永久识别码")
+                    OutlinedTextField(
+                        value = pairingCodeInput,
+                        onValueChange = { pairingCodeInput = it.uppercase().take(6) },
+                        label = { Text("永久识别码") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = { showPairingDialog = false }, enabled = !isPairing, modifier = Modifier.weight(1f)) {
+                            Text("取消")
+                        }
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    isPairing = true
+                                    relayState = "正在绑定..."
+                                    val result = withContext(Dispatchers.IO) { relayClient.pair(pairingCodeInput, relayClient.displayName()) }
+                                    isPairing = false
+                                    if (result.isSuccess) {
+                                        pairingCodeInput = ""
+                                        showPairingDialog = false
+                                        relayState = "绑定成功，正在连接..."
+                                        relayClient.connect()
+                                    } else {
+                                        relayState = "绑定失败: ${result.exceptionOrNull()?.message}"
+                                    }
+                                }
+                            },
+                            enabled = pairingCodeInput.length == 6 && !isPairing,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("确认绑定") }
                     }
                 }
             }

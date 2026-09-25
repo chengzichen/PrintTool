@@ -20,8 +20,14 @@ object Printer {
 
     fun printPdf(pdfFile: File, printerName: String? = null) {
         val document = PDDocument.load(pdfFile)
+        var printJob: PrinterJob? = null
+        var previousPageFormat: java.awt.print.PageFormat? = null
         try {
-            val printJob = PrinterJob.getPrinterJob()
+            printJob = PrinterJob.getPrinterJob()
+            // Keep a snapshot of the job's original page format. The custom
+            // paper size below is only for this print job and must not leak
+            // into the next job or the system printer defaults.
+            previousPageFormat = printJob.defaultPage()
             
             val printService: PrintService? = if (printerName != null) {
                 PrintServiceLookup.lookupPrintServices(null, null).find { it.name == printerName }
@@ -54,6 +60,13 @@ object Printer {
             
             printJob.print(attributes) // Silent print to selected printer
         } finally {
+            // Restore the per-job page format even when printing fails. Java
+            // PrintService does not persist this PageFormat, but restoring it
+            // explicitly prevents future reuse from inheriting this job's
+            // temporary 60x40/80x130 dimensions.
+            if (printJob != null && previousPageFormat != null) {
+                runCatching { printJob.defaultPage(previousPageFormat) }
+            }
             document.close()
         }
     }
