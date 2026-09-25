@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.printtool'
-version = '1.0.1'
+version = '1.0.2'
 
 repositories {
     google()
@@ -53,7 +53,7 @@ compose.desktop {
                           org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
                           org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg)
             packageName = 'PrintTool'
-            packageVersion = '1.0.1'
+            packageVersion = '1.0.2'
             
             macOS {
                 iconFile.set(project.file("src/main/resources/icon.icns"))

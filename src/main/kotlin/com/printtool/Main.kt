@@ -175,16 +175,21 @@ fun App() {
 
     LaunchedEffect(Unit) {
         relayClient.onState = { state -> relayState = state }
-        relayClient.onJob = { job ->
+        relayClient.onJob = job@{ job ->
+            // A reconnect can deliver several historical jobs in one burst.
+            // Job IDs are monotonic, so ignore anything older than the newest
+            // task already accepted by this client.
+            if (job.jobId <= activeRemoteJobId.get()) return@job
             activeRemotePrintTask.getAndSet(null)?.cancel()
             activeRemoteJobId.set(job.jobId)
-            remotePrintQueue = listOf(RemotePrintQueueItem(job, "已接收，排队打印"))
-            activeRemotePrintTask.set(coroutineScope.launch {
+            val task = coroutineScope.launch {
+                remotePrintQueue = listOf(RemotePrintQueueItem(job, "已接收，排队打印"))
                 // The server cancels older pending/delivered jobs when a new
                 // job is submitted. Keep the UI consistent and show only the
                 // current print data instead of stale unprinted jobs.
                 handleRemotePrintJob(job)
-            })
+            }
+            activeRemotePrintTask.set(task)
         }
         if (relayClient.isPaired()) {
             relayState = "正在自动连接..."
